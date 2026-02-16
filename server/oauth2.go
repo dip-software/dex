@@ -253,8 +253,8 @@ type federatedIDClaims struct {
 	UserID      string `json:"user_id,omitempty"`
 }
 
-func (s *Server) newAccessToken(ctx context.Context, clientID string, claims storage.Claims, scopes []string, nonce, connID string) (accessToken string, expiry time.Time, err error) {
-	return s.newIDToken(ctx, clientID, claims, scopes, nonce, storage.NewID(), "", connID)
+func (s *Server) newAccessToken(ctx context.Context, clientID string, claims storage.Claims, scopes []string, nonce, connID string, connectorData []byte) (accessToken string, expiry time.Time, err error) {
+	return s.newIDToken(ctx, clientID, claims, scopes, nonce, storage.NewID(), "", connID, connectorData)
 }
 
 func getClientID(aud audience, azp string) (string, error) {
@@ -300,7 +300,7 @@ func genSubject(userID string, connID string) (string, error) {
 	return internal.Marshal(sub)
 }
 
-func (s *Server) newIDToken(ctx context.Context, clientID string, claims storage.Claims, scopes []string, nonce, accessToken, code, connID string) (idToken string, expiry time.Time, err error) {
+func (s *Server) newIDToken(ctx context.Context, clientID string, claims storage.Claims, scopes []string, nonce, accessToken, code, connID string, connectorData []byte) (idToken string, expiry time.Time, err error) {
 	issuedAt := s.now()
 	expiry = issuedAt.Add(s.idTokensValidFor)
 
@@ -387,6 +387,22 @@ func (s *Server) newIDToken(ctx context.Context, clientID string, claims storage
 		return "", expiry, fmt.Errorf("could not serialize claims: %v", err)
 	}
 
+	conn, err := s.getConnector(ctx, connID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "failed to get connector", "connector", connID, "err", err)
+		return "", expiry, err
+	}
+	switch c := conn.Connector.(type) {
+        case connector.PayloadExtender:
+                extendedPayload, err := c.ExtendPayload(scopes, payload, connectorData)
+                if err != nil {
+                        s.logger.WarnContext(ctx, "failed to enhance payload", "err", err)
+                        break
+                }
+                payload = extendedPayload
+        default:
+        }
+
 	if idToken, err = s.signer.Sign(ctx, payload); err != nil {
 		return "", expiry, fmt.Errorf("failed to sign payload: %v", err)
 	}
@@ -461,8 +477,7 @@ func (s *Server) parseAuthorizationRequest(r *http.Request) (*storage.AuthReques
 	}
 
 	if codeChallengeMethod != codeChallengeMethodS256 && codeChallengeMethod != codeChallengeMethodPlain {
-		description := fmt.Sprintf("Unsupported PKCE challenge method (%q).", codeChallengeMethod)
-		return nil, newRedirectedErr(errInvalidRequest, description)
+		return nil, newRedirectedErr(errInvalidRequest, "Unsupported PKCE challenge method (%q).", codeChallengeMethod)
 	}
 
 	var (
@@ -545,8 +560,7 @@ func (s *Server) parseAuthorizationRequest(r *http.Request) (*storage.AuthReques
 	}
 	if rt.token {
 		if redirectURI == redirectURIOOB {
-			err := fmt.Sprintf("Cannot use response type 'token' with redirect_uri '%s'.", redirectURIOOB)
-			return nil, newRedirectedErr(errInvalidRequest, err)
+			return nil, newRedirectedErr(errInvalidRequest, "Cannot use response type 'token' with redirect_uri '%s'.", redirectURIOOB)
 		}
 	}
 
