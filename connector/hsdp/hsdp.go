@@ -58,7 +58,7 @@ type Config struct {
 	// InsecureEnableGroups enables groups claims. This is disabled by default until https://github.com/dexidp/dex/issues/1065 is resolved
 	InsecureEnableGroups bool `json:"insecureEnableGroups"`
 
-	// PromptType will be used fot the prompt parameter (when offline_access, by default prompt=consent)
+	// PromptType will be used fot the prompt parameter (when offline_access, prompt should be prompt=consent)
 	PromptType string `json:"promptType"`
 }
 
@@ -125,11 +125,6 @@ func (c *Config) Open(id string, logger *slog.Logger) (conn connector.Connector,
 		scopes = append(scopes, filtered...)
 	} else {
 		scopes = append(scopes, "profile", "email", "groups")
-	}
-
-	// PromptType should be "consent" by default, if not set
-	if c.PromptType == "" {
-		c.PromptType = "consent"
 	}
 
 	client, err := iam.NewClient(nil, &iam.Config{
