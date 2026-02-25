@@ -125,6 +125,8 @@ type Config struct {
 	// If enabled, the server will continue starting even if some connectors fail to initialize.
 	// This allows the server to operate with a subset of connectors if some are misconfigured.
 	ContinueOnConnectorFailure bool
+
+	AllowedScopePrefixes []string
 }
 
 // WebConfig holds the server's frontend templates and asset configuration.
@@ -192,6 +194,8 @@ type Server struct {
 	supportedResponseTypes map[string]bool
 
 	supportedGrantTypes []string
+
+	allowedScopePrefixes []string
 
 	now func() time.Time
 
@@ -300,6 +304,7 @@ func newServer(ctx context.Context, c Config) (*Server, error) {
 		storage:                newKeyCacher(c.Storage, now),
 		supportedResponseTypes: supportedRes,
 		supportedGrantTypes:    supportedGrants,
+		allowedScopePrefixes:   c.AllowedScopePrefixes,
 		idTokensValidFor:       value(c.IDTokensValidFor, 24*time.Hour),
 		authRequestsValidFor:   value(c.AuthRequestsValidFor, 24*time.Hour),
 		deviceRequestsValidFor: value(c.DeviceRequestsValidFor, 5*time.Minute),
