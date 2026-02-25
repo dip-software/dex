@@ -116,3 +116,7 @@ type RefreshConnector interface {
 type TokenIdentityConnector interface {
 	TokenIdentity(ctx context.Context, subjectTokenType, subjectToken string) (Identity, error)
 }
+
+type PayloadExtender interface {
+	ExtendPayload(scopes []string, payload []byte, connectorData []byte) ([]byte, error)
+}
