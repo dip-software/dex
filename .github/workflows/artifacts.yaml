@@ -224,11 +224,12 @@ jobs:
         run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
 
       - name: Restore trivy cache
+        id: trivy-cache
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: cache/db
-          key: trivy-cache-${{ steps.date.outputs.date }}
-          restore-keys: trivy-cache-
+          path: .cache/trivy
+          key: cache-trivy-${{ steps.date.outputs.date }}
+          restore-keys: cache-trivy-
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
@@ -238,17 +239,16 @@ jobs:
           output: trivy-results.sarif
           scan-type: "rootfs"
           scan-ref: "."
-          cache-dir: "./cache"
-        # Disable skipping trivy cache for now
+          cache-dir: ".cache/trivy"
         env:
-          TRIVY_SKIP_DB_UPDATE: true
-          TRIVY_SKIP_JAVA_DB_UPDATE: true
+          TRIVY_SKIP_DB_UPDATE: ${{ steps.trivy-cache.outputs.cache-hit == 'true' }}
+          TRIVY_SKIP_JAVA_DB_UPDATE: ${{ steps.trivy-cache.outputs.cache-hit == 'true' }}
 
       ## Trivy-db uses `0600` permissions.
       ## But `action/cache` use `runner` user by default
       ## So we need to change the permissions before caching the database.
       - name: change permissions for trivy.db
-        run: sudo chmod 0644 ./cache/db/trivy.db
+        run: sudo chmod 0644 .cache/trivy/db/trivy.db || true
 
       - name: Check Trivy sarif
         run: cat trivy-results.sarif
